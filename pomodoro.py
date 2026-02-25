@@ -3,6 +3,39 @@ from datetime import datetime
 import os
 import sys
 from enum import Enum, auto
+import json
+from pathlib import Path
+
+DEFAULT_CONFIG = {
+    "work_minutes": 25,
+    "short_break_minutes": 5,
+    "long_break_minutes": 15,
+    "long_break_every": 3,
+    "keys": {"pause": "p", "quit": "q", "skip": "s"}
+}
+
+def load_config(path: str = "config.json") -> dict:
+    cfg = DEFAULT_CONFIG.copy()
+    p = Path(path)
+
+    if not p.exists():
+        return cfg  # no file? use defaults
+
+    with p.open("r", encoding="utf-8") as f:
+        user_cfg = json.load(f)
+
+    # shallow merge top-level
+    cfg.update({k: v for k, v in user_cfg.items() if k != "keys"})
+    # merge nested keys
+    if "keys" in user_cfg and isinstance(user_cfg["keys"], dict):
+        cfg["keys"] = {**cfg["keys"], **user_cfg["keys"]}
+
+    # basic sanity checks
+    for k in ["work_minutes", "short_break_minutes", "long_break_minutes", "long_break_every"]:
+        if not isinstance(cfg[k], int) or cfg[k] <= 0:
+            raise ValueError(f"{k} must be a positive int")
+
+    return cfg
 
 
 class KeyPoller():
@@ -34,14 +67,17 @@ class Command(Enum):
     SKIP = auto()
 
 class PomodoroBasic():
-    WORK_MIN = 25
-    SHORT_BREAK_MIN = 5
-    LONG_BREAK_MIN = 15
+    def __init__(self, config_path="config.json"):
+        self.cfg = load_config(config_path)
 
-    #Current Test Values
-    WORK_SECS = 10 # WORK_MIN * 60
-    SHORT_BREAK_SECS = 3 # SHORT_BREAK_MIN * 60
-    LONG_BREAK_SECS = 5 # LONG_BREAK_MIN * 60    
+        self.WORK_SECS = self.cfg["work_minutes"] * 60
+        self.SHORT_BREAK_SECS = self.cfg["short_break_minutes"] * 60
+        self.LONG_BREAK_SECS = self.cfg["long_break_minutes"] * 60
+        self.LONG_BREAK_EVERY = self.cfg["long_break_every"]
+
+        self.KEY_PAUSE = self.cfg["keys"]["pause"]
+        self.KEY_QUIT  = self.cfg["keys"]["quit"]
+        self.KEY_SKIP  = self.cfg["keys"]["skip"]
 
 
 
@@ -61,10 +97,10 @@ class PomodoroBasic():
 
                 if cmd == "":
                     return Command.CONTINUE
-                elif cmd == "q":
+                elif cmd == self.KEY_QUIT:
                     print("Quitting...")
                     return Command.QUIT
-                elif cmd == "s":
+                elif cmd == self.KEY_SKIP:
                     print("Skipping...")
                     return Command.SKIP
                 else:
@@ -154,14 +190,17 @@ class PomodoroBasic():
             rotation += 1
 
 class Pomodoro():
-    WORK_MIN = 25
-    SHORT_BREAK_MIN = 5
-    LONG_BREAK_MIN = 15
+    def __init__(self, config_path="config.json"):
+        self.cfg = load_config(config_path)
 
-    #Current Test Values
-    WORK_SECS = 10 # WORK_MIN * 60
-    SHORT_BREAK_SECS = 3 # SHORT_BREAK_MIN * 60
-    LONG_BREAK_SECS = 5 # LONG_BREAK_MIN * 60
+        self.WORK_SECS = self.cfg["work_minutes"] * 60
+        self.SHORT_BREAK_SECS = self.cfg["short_break_minutes"] * 60
+        self.LONG_BREAK_SECS = self.cfg["long_break_minutes"] * 60
+        self.LONG_BREAK_EVERY = self.cfg["long_break_every"]
+
+        self.KEY_PAUSE = self.cfg["keys"]["pause"]
+        self.KEY_QUIT  = self.cfg["keys"]["quit"]
+        self.KEY_SKIP  = self.cfg["keys"]["skip"]
 
     #For spammed enter in the terminal
     def flush_stdin(self):
@@ -179,10 +218,10 @@ class Pomodoro():
 
                 if cmd == "":
                     return Command.CONTINUE
-                elif cmd == "q":
+                elif cmd == self.KEY_QUIT:
                     print("Quitting...")
                     return Command.QUIT
-                elif cmd == "s":
+                elif cmd == self.KEY_SKIP:
                     print("Skipping...")
                     return Command.SKIP
                 else:
@@ -209,13 +248,13 @@ class Pomodoro():
                 k = keys.get_key()
                 if k:
                     k = k.lower()
-                    if k == "q":
+                    if k == self.KEY_QUIT:
                         print("\nQuitting...")
                         return "quit"
-                    if k == "s":
+                    if k == self.KEY_SKIP:
                         print("\nSkipped.")
                         return "skip"
-                    if k == "p":
+                    if k == self.KEY_PAUSE:
                         paused = not paused
                         print("\nPaused." if paused else "\nResumed.")
 
